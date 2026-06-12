@@ -38,13 +38,10 @@ En entornos con Docker Desktop para Windows, las métricas de contenedor individ
 
 Para asegurar la ejecución fluida del stack completo sobre **Windows con Docker Desktop** sin requerir WSL de forma directa, se realizaron las siguientes correcciones de infraestructura:
 
-1. **Renombrado del archivo de Loki:**
-   * **Cambio:** Se renombró `loki/loki-config.yml` a `loki/loki-config.yaml`.
-   * **Justificación:** Corrigió un error de volumen inexistente en `docker-compose.yml` que causaba el fallo en la inicialización del contenedor de Loki al levantar el stack.
-2. **Compatibilidad de `node-exporter`:**
+1. **Compatibilidad de `node-exporter`:**
    * **Cambio:** Se eliminó la configuración de namespaces de red compartidos (`pid: host`), la directiva de filesystem raíz (`--path.rootfs=/host`) y el montaje del volumen local `/:/host`.
    * **Justificación:** Windows no soporta el montaje del sistema de archivos raíz de Linux `/` ni el uso compartido del PID del host, lo cual impedía que el contenedor de métricas de hardware pudiera iniciarse.
-3. **Compatibilidad de `cAdvisor`:**
+2. **Compatibilidad de `cAdvisor`:**
    * **Cambio:** Se removió el montaje de disco `/dev/disk/:/dev/disk:ro` y el mapeo de dispositivos `devices: - /dev/kmsg`.
    * **Justificación:** Estas rutas y accesos de dispositivos específicos del kernel Linux no existen ni son mapeables directamente en la arquitectura de Docker Desktop sobre Windows.
 
@@ -54,3 +51,36 @@ Para asegurar la ejecución fluida del stack completo sobre **Windows con Docker
 
 * **Decisión de diseño:** Se estableció el umbral de alerta en **80%** en lugar del 50% recomendado originalmente en la guía.
 * **Justificación:** En entornos locales que ejecutan Docker Desktop dentro de máquinas virtuales de desarrollo, son frecuentes los picos de CPU aleatorios debido a la virtualización de discos y tareas secundarias del sistema operativo. Subir el umbral al **80%** previene falsos positivos en el entorno Windows local del estudiante, permitiendo que la alarma permanezca limpia en estado `Normal` y que la transición a `Firing` sea clara y controlada únicamente cuando se ejecuta la carga intensiva programada.
+
+---
+
+## Cómo validar el laboratorio
+
+1. Clonar el repo y levantar el stack:
+```bash
+git clone 
+cd iac-observabilidad
+docker compose up -d --build
+```
+
+2. Verificar que todos los servicios estén arriba:
+```bash
+docker compose ps
+```
+
+3. Confirmar en el navegador:
+   - Frontend: http://localhost:8080
+   - Métricas del backend: http://localhost:3001/metrics
+   - Prometheus targets (todos en UP): http://localhost:9090/targets
+   - Grafana: http://localhost:3000 (admin/admin)
+
+4. En Grafana, ir a Connections → Data sources y hacer Save & test en Prometheus y Loki. Ambos deben responder verde.
+
+5. Abrir el dashboard **Observabilidad — Lab** y verificar los 4 paneles con datos.
+
+6. Para probar la alarma y el ciclo completo:
+```bash
+curl "http://localhost:3001/load?seconds=60"
+```
+En Alerting → Alert rules la regla `CPU backend > 80%` debe pasar por Normal → Pending → Firing. Una vez en Firing, el panel de logs de aplicación debe mostrar:
+`ERROR [backend] grafana_alert_received alert="CPU backend > 80%" status=firing count=1`
