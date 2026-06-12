@@ -54,38 +54,3 @@ Para asegurar la ejecución fluida del stack completo sobre **Windows con Docker
 
 * **Decisión de diseño:** Se estableció el umbral de alerta en **80%** en lugar del 50% recomendado originalmente en la guía.
 * **Justificación:** En entornos locales que ejecutan Docker Desktop dentro de máquinas virtuales de desarrollo, son frecuentes los picos de CPU aleatorios debido a la virtualización de discos y tareas secundarias del sistema operativo. Subir el umbral al **80%** previene falsos positivos en el entorno Windows local del estudiante, permitiendo que la alarma permanezca limpia en estado `Normal` y que la transición a `Firing` sea clara y controlada únicamente cuando se ejecuta la carga intensiva programada.
-
----
-
-## 4. Instrucciones para Validar el Laboratorio
-
-Sigue estos pasos para levantar el stack completo y validar el ciclo cerrado:
-
-1. **Clonar e iniciar el stack:**
-   ```bash
-   git clone <url-del-repositorio>
-   cd iac-observabilidad
-   docker compose up -d --build
-   ```
-2. **Verificar los accesos locales:**
-   * Frontend: http://localhost:8080
-   * Backend (métricas): http://localhost:3001/metrics
-   * Prometheus Targets: http://localhost:9090/targets (Todos deben aparecer en estado `UP`)
-   * Grafana: http://localhost:3000 (Iniciar con `admin`/`admin` o tu contraseña asignada)
-3. **Validar fuentes de datos:**
-   * En Grafana ve a *Connections ➡️ Data sources*. Abre **Prometheus** y **Loki** y presiona *Save & test* en ambos para verificar que se conectan de manera exitosa.
-4. **Probar el Dashboard:**
-   * Abre el dashboard **Observabilidad — Lab** y confirma el funcionamiento de los paneles:
-     * CPU del host (%)
-     * CPU contenedor backend (%)
-     * Logs de infraestructura (filtrando componentes del stack)
-     * Logs de aplicación (mostrando peticiones HTTP con campos enriquecidos como latencias y órdenes).
-5. **Comprobar la Alerta y el Webhook (Ciclo Cerrado):**
-   * Genera carga simulada de CPU por 60 segundos en el backend:
-     ```bash
-     curl "http://localhost:3001/load?seconds=60"
-     ```
-   * En Grafana (*Alerting ➡️ Alert rules*), verifica que la regla `CPU backend > 80%` pase de `Normal` a `Pending` y finalmente a `Firing` (rojo).
-   * Al dispararse, Grafana notificará al webhook de integración (`http://backend:3001/alerts`).
-   * Valida en el panel de **Logs de aplicación** de tu Dashboard que se haya registrado el log enriquecido de la alerta:
-     `ERROR [backend] grafana_alert_received alert="CPU backend > 80%" status=firing count=1`
